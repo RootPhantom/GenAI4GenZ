@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Health Monitoring Agent</title>
+    <link rel="icon" type="image/png" href="assets/anurag-health-card-logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,7 +17,11 @@
     <div class="app">
       <aside class="sidebar card">
         <div class="brand">
-          <div class="brand-icon">+</div>
+          <img
+            class="brand-icon"
+            src="assets/anurag-health-card-logo.png"
+            alt="Anurag Health Logo"
+          />
           <div>
             <h2>Health Agent</h2>
             <p class="muted">AI + Compression</p>
@@ -36,6 +41,15 @@
           <a href="#chat">Chatbot</a>
           <a href="#profile">Profile</a>
         </nav>
+
+        <section class="sidebar-profile">
+          <h3>Profile</h3>
+          <p class="muted">Name: <span id="sidebarProfileName">Not provided</span></p>
+          <h4>History</h4>
+          <ul id="sidebarHistoryList" class="sidebar-history-list">
+            <li>No health history yet.</li>
+          </ul>
+        </section>
       </aside>
 
       <main class="content">
@@ -202,8 +216,71 @@
     </div>
 
     <footer class="developer-credit">
-      Developed by <span>ANURAG SINGH</span>
+      <div class="developer-credit-inner">
+        <div class="developer-profile-chip">
+          <img
+            class="developer-photo"
+            src="assets/anurag-photo.jpg"
+            alt="Anurag Singh"
+            onerror="this.onerror=null;this.src='assets/anurag-health-card-logo.png';"
+          />
+          <p class="developer-credit-text">Developed by <span>ANURAG SINGH</span></p>
+        </div>
+        <div class="developer-links" aria-label="Developer social links">
+          <a
+            href="https://www.linkedin.com/in/anurag-singh0041"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
+            title="LinkedIn"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M4.983 3.5C4.983 4.88 3.87 6 2.494 6A2.5 2.5 0 1 1 4.983 3.5zM.5 8h4V23h-4V8zm7 0h3.834v2.05h.055C11.923 9.09 13.27 8 15.612 8c4.87 0 5.768 3.204 5.768 7.367V23h-4v-6.765c0-1.614-.03-3.688-2.25-3.688-2.25 0-2.594 1.758-2.594 3.572V23h-4V8z"
+                fill="currentColor"
+              />
+            </svg>
+          </a>
+          <a
+            href="https://www.github.com/rootphantom"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+            title="GitHub"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.2c-3.34.73-4.04-1.61-4.04-1.61-.55-1.38-1.34-1.75-1.34-1.75-1.1-.74.08-.72.08-.72 1.22.08 1.86 1.24 1.86 1.24 1.08 1.87 2.84 1.33 3.53 1.02.11-.79.42-1.33.77-1.64-2.67-.31-5.47-1.35-5.47-5.98 0-1.33.47-2.42 1.24-3.27-.12-.31-.54-1.57.12-3.27 0 0 1.01-.33 3.3 1.25a11.35 11.35 0 0 1 6 0c2.29-1.58 3.29-1.25 3.29-1.25.66 1.7.24 2.96.12 3.27.77.85 1.24 1.94 1.24 3.27 0 4.64-2.81 5.67-5.5 5.97.43.37.81 1.11.81 2.24v3.32c0 .32.21.7.83.58A12 12 0 0 0 12 .5z"
+                fill="currentColor"
+              />
+            </svg>
+          </a>
+        </div>
+      </div>
     </footer>
+
+    <button id="chatFab" class="chat-fab" type="button" aria-label="Ask chatbot">
+      <img
+        src="assets/chatbot-agent.png"
+        alt="Ask AI"
+        onerror="this.onerror=null;this.src='assets/anurag-health-card-logo.png';"
+      />
+    </button>
+
+    <section id="chatWidget" class="chat-widget" aria-label="Chat messenger">
+      <header class="chat-widget-head">
+        <h4>Ask Health Agent</h4>
+        <div class="chat-widget-actions">
+          <button id="chatWidgetClear" type="button" aria-label="Clear chat">Clear</button>
+          <button id="chatWidgetClose" type="button" aria-label="Close chat">×</button>
+        </div>
+      </header>
+      <div id="chatWidgetLog" class="chat-widget-log"></div>
+      <form id="chatWidgetForm" class="chat-widget-row">
+        <input id="chatWidgetInput" placeholder="Ask your question..." />
+        <button type="submit">Send</button>
+      </form>
+    </section>
 
     <script src="script.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

@@ -25,15 +25,140 @@ const statusEl = document.getElementById("formStatus");
 const chatLog = document.getElementById("chatLog");
 const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
+const chatFab = document.getElementById("chatFab");
+const chatWidget = document.getElementById("chatWidget");
+const chatWidgetLog = document.getElementById("chatWidgetLog");
+const chatWidgetForm = document.getElementById("chatWidgetForm");
+const chatWidgetInput = document.getElementById("chatWidgetInput");
+const chatWidgetClose = document.getElementById("chatWidgetClose");
+const chatWidgetClear = document.getElementById("chatWidgetClear");
+const sidebarProfileName = document.getElementById("sidebarProfileName");
+const sidebarHistoryList = document.getElementById("sidebarHistoryList");
 
 let latest = null;
 const REPORT_LOGO_PATH = "assets/anurag-health-card-logo.png";
+const healthHistoryEntries = [];
+const HISTORY_MAX_ENTRIES = 8;
+const SIDEBAR_HISTORY_STORAGE_KEY = "health-sidebar-history";
+const SIDEBAR_HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let sidebarHistoryCreatedAt = null;
+
+const sanitizeText = (value, maxLength) => String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+
+const getHistoryPayload = (input, risk, finalScore) =>
+  `${input.patientName || "Patient"}: Risk ${risk}, Score ${finalScore}, History ${input.medicalHistory.slice(0, 90)}`;
+
+const renderSidebarHistory = () => {
+  if (!sidebarHistoryList) return;
+
+  sidebarHistoryList.innerHTML = "";
+
+  if (!healthHistoryEntries.length) {
+    const emptyLi = document.createElement("li");
+    emptyLi.textContent = "No health history yet.";
+    sidebarHistoryList.appendChild(emptyLi);
+    return;
+  }
+
+  healthHistoryEntries.forEach((entry) => {
+    const li = document.createElement("li");
+    li.textContent = entry;
+    sidebarHistoryList.appendChild(li);
+  });
+};
+
+const saveSidebarHistory = (profileName) => {
+  try {
+    const createdAt = sidebarHistoryCreatedAt || Date.now();
+    sidebarHistoryCreatedAt = createdAt;
+
+    const payload = {
+      profileName,
+      entries: healthHistoryEntries,
+      createdAt,
+      expiresAt: createdAt + SIDEBAR_HISTORY_TTL_MS
+    };
+    window.localStorage.setItem(SIDEBAR_HISTORY_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+  }
+};
+
+const loadSidebarHistory = () => {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_HISTORY_STORAGE_KEY);
+    if (!raw) {
+      renderSidebarHistory();
+      return;
+    }
+
+    const payload = JSON.parse(raw);
+    if (!payload || Number(payload.expiresAt) < Date.now()) {
+      window.localStorage.removeItem(SIDEBAR_HISTORY_STORAGE_KEY);
+      sidebarHistoryCreatedAt = null;
+      renderSidebarHistory();
+      return;
+    }
+
+    sidebarHistoryCreatedAt = Number(payload.createdAt) || Date.now();
+
+    if (sidebarProfileName && payload.profileName) {
+      sidebarProfileName.textContent = String(payload.profileName);
+    }
+
+    const restoredEntries = Array.isArray(payload.entries) ? payload.entries.slice(0, HISTORY_MAX_ENTRIES) : [];
+    healthHistoryEntries.splice(0, healthHistoryEntries.length, ...restoredEntries);
+    renderSidebarHistory();
+  } catch {
+    sidebarHistoryCreatedAt = null;
+    renderSidebarHistory();
+  }
+};
+
+const updateSidebarProfile = (input, risk, finalScore) => {
+  const profileName = input.patientName || "Not provided";
+
+  if (sidebarProfileName) {
+    sidebarProfileName.textContent = profileName;
+  }
+
+  if (!sidebarHistoryList) return;
+
+  const historyPayload = getHistoryPayload(input, risk, finalScore);
+  const historyText = `${new Date().toLocaleDateString()} - ${historyPayload}`;
+
+  const topEntry = healthHistoryEntries[0] || "";
+  const topEntryPayload = String(topEntry).replace(/^\d{1,2}\/\d{1,2}\/\d{2,4}\s*-\s*/i, "").toLowerCase();
+  const normalizedPayload = historyPayload.toLowerCase();
+
+  if (topEntryPayload === normalizedPayload) {
+    renderSidebarHistory();
+    saveSidebarHistory(profileName);
+    return;
+  }
+
+  healthHistoryEntries.unshift(historyText);
+  if (healthHistoryEntries.length > HISTORY_MAX_ENTRIES) {
+    healthHistoryEntries.length = HISTORY_MAX_ENTRIES;
+  }
+
+  renderSidebarHistory();
+  saveSidebarHistory(profileName);
+};
+
+loadSidebarHistory();
 
 const addChat = (text, role = "assistant") => {
   const p = document.createElement("p");
   p.textContent = `${role === "user" ? "You" : "Agent"}: ${text}`;
   chatLog.appendChild(p);
   chatLog.scrollTop = chatLog.scrollHeight;
+
+  if (chatWidgetLog) {
+    const widgetLine = document.createElement("p");
+    widgetLine.textContent = p.textContent;
+    chatWidgetLog.appendChild(widgetLine);
+    chatWidgetLog.scrollTop = chatWidgetLog.scrollHeight;
+  }
 };
 
 const getAgeProfile = (ageValue) => {
@@ -68,9 +193,14 @@ const getAgeProfile = (ageValue) => {
 
 const scoreFromInput = (v, ageProfile) => {
   let score = 85;
+  const { systolic, diastolic } = parseBloodPressure(v.bloodPressure);
+
   if (v.sleepHours < ageProfile.sleepLow) score -= 8;
   if (v.steps < ageProfile.stepsLow) score -= 7;
   if (v.heartRate > ageProfile.heartRateHigh || v.heartRate < ageProfile.heartRateLow) score -= 10;
+  if ((systolic && systolic >= ageProfile.bpHighSys) || (diastolic && diastolic >= ageProfile.bpHighDia)) score -= 10;
+  if ((systolic && systolic >= ageProfile.bpUrgentSys) || (diastolic && diastolic >= ageProfile.bpUrgentDia)) score -= 6;
+  if ((systolic && systolic < 95) || (diastolic && diastolic < 60)) score -= 4;
   if (/poor|junk|irregular/i.test(v.diet)) score -= 6;
   if (/high|severe/i.test(v.stress)) score -= 8;
   return Math.max(0, Math.min(100, score));
@@ -78,8 +208,19 @@ const scoreFromInput = (v, ageProfile) => {
 
 const flagsFromInput = (v, ageProfile) => {
   const flags = [];
+  const { systolic, diastolic } = parseBloodPressure(v.bloodPressure);
+
   if (v.heartRate > ageProfile.heartRateHigh + 5 || v.heartRate < ageProfile.heartRateLow) {
     flags.push("Abnormal heart rate");
+  }
+  if ((systolic && systolic >= ageProfile.bpHighSys) || (diastolic && diastolic >= ageProfile.bpHighDia)) {
+    flags.push("Elevated blood pressure");
+  }
+  if ((systolic && systolic >= ageProfile.bpUrgentSys) || (diastolic && diastolic >= ageProfile.bpUrgentDia)) {
+    flags.push("Critical blood pressure");
+  }
+  if ((systolic && systolic < 95) || (diastolic && diastolic < 60)) {
+    flags.push("Low blood pressure");
   }
   if (v.sleepHours < 6) flags.push("Sleep deficit");
   if (v.steps < 4000) flags.push("Low activity");
@@ -92,6 +233,22 @@ const parseBloodPressure = (bpText) => {
   const match = String(bpText || "").match(/(\d{2,3})\s*[\/-]\s*(\d{2,3})/);
   if (!match) return { systolic: null, diastolic: null };
   return { systolic: Number(match[1]), diastolic: Number(match[2]) };
+};
+
+const isValidBloodPressure = (bpText) => {
+  const { systolic, diastolic } = parseBloodPressure(bpText);
+  if (!systolic || !diastolic) return false;
+  if (systolic < 70 || systolic > 260) return false;
+  if (diastolic < 40 || diastolic > 160) return false;
+  if (systolic <= diastolic) return false;
+  return true;
+};
+
+const areVitalsReasonable = (input) => {
+  if (input.heartRate < 30 || input.heartRate > 220) return false;
+  if (input.sleepHours < 0 || input.sleepHours > 24) return false;
+  if (input.steps < 0 || input.steps > 100000) return false;
+  return true;
 };
 
 const detectClinicalPatterns = (input, ageProfile) => {
@@ -294,31 +451,76 @@ const downloadPdfReport = async () => {
   const cardY = 12;
   const cardW = pageWidth - 20;
   const cardH = pageHeight - 24;
+  const contentStartY = cardY + 34;
 
-  doc.setDrawColor(37, 99, 235);
-  doc.setLineWidth(1.2);
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "S");
+  const drawPageHeader = (isContinuation = false) => {
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(1.2);
+    doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "S");
 
-  doc.setFillColor(15, 23, 42);
-  doc.rect(cardX, cardY, cardW, 24, "F");
+    doc.setFillColor(15, 23, 42);
+    const inset = 0.6;
+    const headerHeight = 24;
+    const headerRadius = 3.2;
+    doc.roundedRect(cardX + inset, cardY + inset, cardW - inset * 2, headerHeight, headerRadius, headerRadius, "F");
+    doc.rect(cardX + inset, cardY + 12, cardW - inset * 2, headerHeight - 12 + inset, "F");
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.text("HEALTH MONITORING CERTIFICATE", cardX + 8, cardY + 15);
-  doc.setFontSize(9);
-  doc.text("AI Health Summary & Risk Evaluation Card", cardX + 8, cardY + 20);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.text("HEALTH MONITORING CERTIFICATE", cardX + 8, cardY + 15);
+    doc.setFontSize(9);
+    doc.text(
+      isContinuation ? "AI Health Summary & Risk Evaluation Card (Continued)" : "AI Health Summary & Risk Evaluation Card",
+      cardX + 8,
+      cardY + 20
+    );
+  };
+
+  drawPageHeader(false);
 
   doc.setFontSize(11);
 
-  let y = cardY + 34;
+  let y = contentStartY;
   const lineGap = 8;
+  const lineHeight = 5;
+  const contentBottom = pageHeight - 24;
+  const footerBottomPadding = 16;
+  const ensureSpace = (neededHeight = lineHeight) => {
+    if (y + neededHeight <= contentBottom) return;
+    doc.addPage();
+    drawPageHeader(true);
+    y = contentStartY;
+  };
+
   const drawField = (label, value, valueColor = fieldColor.value) => {
+    const rightLimit = cardX + cardW - 8;
+    const labelText = `${label}:`;
+
     doc.setTextColor(...fieldColor.label);
-    doc.text(`${label}:`, cardX + 8, y);
+    doc.text(labelText, cardX + 8, y);
+
     const labelWidth = doc.getTextWidth(`${label}: `);
+    const minValueStartX = cardX + 58;
+    const valueX = Math.max(cardX + 8 + labelWidth, minValueStartX);
+    const valueText = String(value);
+    const valueMaxWidth = rightLimit - valueX;
+
+    const valueLines = valueMaxWidth > 30
+      ? doc.splitTextToSize(valueText, valueMaxWidth)
+      : doc.splitTextToSize(valueText, cardW - 16);
+
+    const textBlockHeight = Math.max(lineGap, valueLines.length * lineHeight + 2);
+    ensureSpace(textBlockHeight);
+
     doc.setTextColor(...valueColor);
-    doc.text(String(value), cardX + 8 + labelWidth, y);
-    y += lineGap;
+    if (valueMaxWidth > 30) {
+      doc.text(valueLines, valueX, y);
+    } else {
+      const stackedY = y + lineHeight;
+      doc.text(valueLines, cardX + 8, stackedY);
+    }
+
+    y += textBlockHeight;
   };
 
   const riskColor = /high|urgent|critical/i.test(risks)
@@ -343,6 +545,7 @@ const downloadPdfReport = async () => {
   drawField("Doctor Review", doctorReview, doctorReviewColor);
 
   y += 8;
+  ensureSpace(12);
   doc.setFontSize(12);
   doc.setTextColor(...fieldColor.heading);
   doc.text("Health Reports", cardX + 8, y);
@@ -350,9 +553,14 @@ const downloadPdfReport = async () => {
   doc.setFontSize(10);
   doc.setTextColor(...fieldColor.value);
   const reportLines = doc.splitTextToSize(healthReports, cardW - 16);
-  doc.text(reportLines, cardX + 8, y);
+  reportLines.forEach((line) => {
+    ensureSpace(lineHeight + 1);
+    doc.text(line, cardX + 8, y);
+    y += lineHeight;
+  });
 
-  y += Math.min(reportLines.length * 5 + 8, 70);
+  y += 8;
+  ensureSpace(12);
   doc.setFontSize(12);
   doc.setTextColor(...fieldColor.heading);
   doc.text("Advices", cardX + 8, y);
@@ -360,27 +568,24 @@ const downloadPdfReport = async () => {
   doc.setFontSize(10);
   if (!advices.length) {
     doc.setTextColor(...fieldColor.muted);
+    ensureSpace(lineHeight + 1);
     doc.text("- No advice available", cardX + 8, y);
     y += 6;
   } else {
     doc.setTextColor(...fieldColor.positive);
     advices.slice(0, 6).forEach((advice) => {
       const adviceLines = doc.splitTextToSize(`- ${advice}`, cardW - 16);
-      doc.text(adviceLines, cardX + 8, y);
-      y += adviceLines.length * 5 + 1;
+      adviceLines.forEach((line) => {
+        ensureSpace(lineHeight + 1);
+        doc.text(line, cardX + 8, y);
+        y += lineHeight;
+      });
+      y += 1;
     });
   }
 
-  const footerY = cardY + cardH - 10;
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.3);
-  doc.line(cardX + 8, footerY - 6, cardX + cardW - 8, footerY - 6);
-  doc.setFontSize(11);
-  doc.setTextColor(30, 41, 59);
-  doc.text("Generated by ANURAG SINGH", cardX + 8, footerY);
-  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, cardX + cardW - 62, footerY);
-
   let watermarkApplied = false;
+  doc.setPage(1);
   try {
     const logoAsset = await loadLogoAsDataUrl(REPORT_LOGO_PATH);
 
@@ -430,6 +635,22 @@ const downloadPdfReport = async () => {
     doc.restoreGraphicsState();
   }
 
+  const footerY = pageHeight - footerBottomPadding;
+  const generatedOn = new Date().toLocaleDateString();
+  const totalPages = doc.getNumberOfPages();
+
+  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+    doc.setPage(pageNumber);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.line(18, footerY - 6, pageWidth - 18, footerY - 6);
+    doc.setFontSize(11);
+    doc.setTextColor(30, 41, 59);
+    doc.text("Generated by ANURAG SINGH", 18, footerY);
+    doc.text(`Generated on: ${generatedOn}`, pageWidth - 18, footerY, { align: "right" });
+    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth / 2, footerY, { align: "center" });
+  }
+
   const safeName = (patientName || "patient").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   doc.save(`health-report-${safeName}.pdf`);
 };
@@ -440,19 +661,29 @@ healthForm.addEventListener("submit", (e) => {
 
   const formData = new FormData(healthForm);
   const input = {
-    patientName: String(formData.get("patientName") || "Patient"),
+    patientName: sanitizeText(formData.get("patientName"), 80) || "Patient",
     patientAge: Number(formData.get("patientAge") || 30),
-    medicalHistory: String(formData.get("medicalHistory") || ""),
-    symptoms: String(formData.get("symptoms") || ""),
-    medications: String(formData.get("medications") || ""),
+    medicalHistory: sanitizeText(formData.get("medicalHistory"), 1200),
+    symptoms: sanitizeText(formData.get("symptoms"), 800),
+    medications: sanitizeText(formData.get("medications"), 500),
     heartRate: Number(formData.get("heartRate") || 0),
-    bloodPressure: String(formData.get("bloodPressure") || ""),
+    bloodPressure: sanitizeText(formData.get("bloodPressure"), 20),
     sleepHours: Number(formData.get("sleepHours") || 0),
     steps: Number(formData.get("steps") || 0),
-    exercise: String(formData.get("exercise") || ""),
-    diet: String(formData.get("diet") || ""),
-    stress: String(formData.get("stress") || "")
+    exercise: sanitizeText(formData.get("exercise"), 300),
+    diet: sanitizeText(formData.get("diet"), 300),
+    stress: sanitizeText(formData.get("stress"), 80)
   };
+
+  if (!isValidBloodPressure(input.bloodPressure)) {
+    statusEl.textContent = "Please enter a valid blood pressure in SYS/DIA format (example: 120/80).";
+    return;
+  }
+
+  if (!areVitalsReasonable(input)) {
+    statusEl.textContent = "Please check vitals values (heart rate, sleep hours, steps) and submit again.";
+    return;
+  }
 
   const ageProfile = getAgeProfile(input.patientAge);
 
@@ -476,8 +707,6 @@ healthForm.addEventListener("submit", (e) => {
     })
   );
 
-  latest = { summary, risk, flags: combinedRisks, finalScore, compressed };
-
   summaryText.textContent = summary;
   compressedPayload.textContent = compressed;
   healthScoreEl.textContent = String(finalScore);
@@ -496,6 +725,21 @@ healthForm.addEventListener("submit", (e) => {
   conditions.forEach((condition) => recs.push(condition.advice));
   if (!recs.length) recs.push("Maintain your current routine and keep tracking.");
   const finalRecs = [...new Set(recs)];
+
+  latest = {
+    summary,
+    risk,
+    flags: combinedRisks,
+    finalScore,
+    compressed,
+    conditions,
+    doctorReview,
+    recs: finalRecs,
+    input,
+    ageProfile
+  };
+
+  updateSidebarProfile(input, risk, finalScore);
 
   recommendationList.innerHTML = "";
   finalRecs.forEach((rec) => {
@@ -524,29 +768,210 @@ healthForm.addEventListener("submit", (e) => {
   reportCardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-chatForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (!text) return;
-  addChat(text, "user");
-  chatInput.value = "";
-
+const respondToChat = (text) => {
   if (!latest) {
     addChat("Please submit your health data first so I can answer accurately.");
     return;
   }
 
-  const q = text.toLowerCase();
-  if (q.includes("how is my health")) {
-    addChat(`Health score ${latest.finalScore}/100, risk ${latest.risk}. Flags: ${latest.flags.join(", ") || "none"}.`);
-  } else if (q.includes("summarize") || q.includes("medical history")) {
-    addChat(latest.summary);
-  } else {
-    addChat("Focus on sleep consistency, stress control, and regular activity based on your latest profile.");
+  const sendWithConfidence = (message, confidence = "Medium") => {
+    addChat(`${message} (Confidence: ${confidence})`);
+  };
+
+  const getDataQualityConfidence = () => {
+    const hasVitals =
+      Number(latest.input?.heartRate) > 0 &&
+      Number(latest.input?.sleepHours) > 0 &&
+      Number(latest.input?.steps) > 0 &&
+      /\d{2,3}\s*[\/-]\s*\d{2,3}/.test(String(latest.input?.bloodPressure || ""));
+    return hasVitals ? "High" : "Medium";
+  };
+
+  const normalize = (value) => String(value || "").toLowerCase();
+  const q = normalize(text);
+
+  const hasAny = (patterns) => patterns.some((pattern) => pattern.test(q));
+  const formatList = (items, emptyText = "none") => (items && items.length ? items.join(", ") : emptyText);
+
+  const intents = {
+    health: hasAny([/how.*health/, /overall/, /status/]),
+    risk: hasAny([/risk/, /danger/, /critical/, /safe/]),
+    flags: hasAny([/flag/, /warning/, /problem/, /issue/]),
+    summary: hasAny([/summar/, /overview/, /history/, /report/]),
+    doctor: hasAny([/doctor/, /consult/, /review/, /hospital/, /urgent/]),
+    recommendation: hasAny([/recommend/, /advice/, /suggest/, /improve/, /better/]),
+    vitals: hasAny([/heart rate/, /bp/, /blood pressure/, /sleep/, /steps/, /vitals/]),
+    conditions: hasAny([/detected condition/, /\bcondition\b/, /diagnos/, /pattern/]),
+    greeting: hasAny([/hello/, /hi\b/, /hey/, /good morning/, /good evening/])
+  };
+
+  if (intents.greeting) {
+    sendWithConfidence("Hello! Ask me about risk, score, recommendations, vitals, conditions, or doctor review.", "High");
+    return;
+  }
+
+  if (intents.health) {
+    sendWithConfidence(`Current health score is ${latest.finalScore}/100 with ${latest.risk} risk profile.`, getDataQualityConfidence());
+    return;
+  }
+
+  if (intents.risk) {
+    sendWithConfidence(`Risk level is ${latest.risk}. Active risks: ${formatList(latest.flags)}.`, getDataQualityConfidence());
+    return;
+  }
+
+  if (intents.flags) {
+    sendWithConfidence(`Risk flags detected: ${formatList(latest.flags)}.`, getDataQualityConfidence());
+    return;
+  }
+
+  if (intents.conditions) {
+    const conditionLabels = (latest.conditions || []).map((condition) => condition.label);
+    sendWithConfidence(
+      `Detected conditions: ${formatList(conditionLabels, "no specific condition pattern")}.`,
+      conditionLabels.length ? "High" : "Medium"
+    );
+    return;
+  }
+
+  if (intents.doctor) {
+    sendWithConfidence(`Doctor review guidance: ${latest.doctorReview}.`, getDataQualityConfidence());
+    return;
+  }
+
+  if (intents.recommendation) {
+    sendWithConfidence(
+      `Top recommendations: ${formatList((latest.recs || []).slice(0, 3), "maintain your current routine")}.`,
+      (latest.recs || []).length ? "High" : "Medium"
+    );
+    return;
+  }
+
+  if (intents.vitals) {
+    const vitalsText = `Vitals are HR ${latest.input.heartRate}, BP ${latest.input.bloodPressure}, Sleep ${latest.input.sleepHours}h, Steps ${latest.input.steps}.`;
+    sendWithConfidence(vitalsText, getDataQualityConfidence());
+    return;
+  }
+
+  if (intents.summary) {
+    sendWithConfidence(latest.summary, "High");
+    return;
+  }
+
+  sendWithConfidence("I can answer about health score, risk, flags, conditions, vitals, doctor review, or recommendations. Ask one of these.", "Medium");
+};
+
+const askServerChat = async (question) => {
+  const context = latest
+    ? {
+        summary: latest.summary,
+        risk: latest.risk,
+        finalScore: latest.finalScore,
+        flags: latest.flags,
+        conditions: (latest.conditions || []).map((condition) => condition.label),
+        doctorReview: latest.doctorReview
+      }
+    : {
+        summary: "No patient submission yet",
+        risk: "Unknown",
+        finalScore: "N/A",
+        flags: [],
+        conditions: [],
+        doctorReview: "N/A"
+      };
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        question,
+        context
+      })
+    });
+
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const reply = String(payload?.reply || "").trim();
+    return reply || null;
+  } catch {
+    return null;
+  }
+};
+
+const handleChatSubmit = (inputEl) => (e) => {
+  e.preventDefault();
+  const text = inputEl?.value.trim();
+  if (!text) return;
+  addChat(text, "user");
+  inputEl.value = "";
+
+  (async () => {
+    const apiReply = await askServerChat(text);
+    if (apiReply) {
+      addChat(apiReply);
+      return;
+    }
+    respondToChat(text);
+  })();
+};
+
+chatForm.addEventListener("submit", handleChatSubmit(chatInput));
+chatWidgetForm?.addEventListener("submit", handleChatSubmit(chatWidgetInput));
+
+downloadReportBtn?.addEventListener("click", downloadPdfReport);
+
+chatFab?.addEventListener("click", () => {
+  if (!chatWidget) return;
+  const shouldOpen = !chatWidget.classList.contains("open");
+  chatWidget.classList.toggle("open", shouldOpen);
+  if (shouldOpen) {
+    setTimeout(() => chatWidgetInput?.focus(), 100);
   }
 });
 
-downloadReportBtn?.addEventListener("click", downloadPdfReport);
+chatWidgetClose?.addEventListener("click", () => {
+  chatWidget?.classList.remove("open");
+});
+
+chatWidgetClear?.addEventListener("click", () => {
+  if (chatLog) chatLog.innerHTML = "";
+  if (chatWidgetLog) chatWidgetLog.innerHTML = "";
+  resetChatWidgetFirstOpen();
+  addChat("Hello! I am your health assistant. Submit your health data to begin.");
+});
+
+const CHAT_WIDGET_FIRST_OPEN_KEY = "health-chat-widget-first-opened";
+
+const hasOpenedChatWidgetBefore = () => {
+  try {
+    return window.localStorage.getItem(CHAT_WIDGET_FIRST_OPEN_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+const markChatWidgetOpened = () => {
+  try {
+    window.localStorage.setItem(CHAT_WIDGET_FIRST_OPEN_KEY, "true");
+  } catch {
+  }
+};
+
+const resetChatWidgetFirstOpen = () => {
+  try {
+    window.localStorage.removeItem(CHAT_WIDGET_FIRST_OPEN_KEY);
+  } catch {
+  }
+};
+
+if (chatWidget && !hasOpenedChatWidgetBefore()) {
+  chatWidget.classList.add("open");
+  markChatWidgetOpened();
+  setTimeout(() => chatWidgetInput?.focus(), 150);
+}
 
 addChat("Hello! I am your health assistant. Submit your health data to begin.");
 updateHealthCondition(Number(healthScoreEl.textContent || 72));

@@ -13,7 +13,7 @@ A clean and human-friendly health dashboard built with pure HTML, CSS, and JavaS
 2. Run static server:
 
 	```bash
-	npm run static
+	npm run dev
 	```
 
 3. Open in browser:
@@ -27,6 +27,58 @@ Main static files:
 - `index.html`
 - `styles.css`
 - `script.js`
+- `server.js`
+
+## Secure API Key Setup (Chatbot)
+
+1. Create your local env file (never commit real keys):
+
+	```bash
+	# Use .env.anurag directly for all project env values
+	```
+
+2. Add your keys in `.env.anurag`:
+
+	```dotenv
+	# Option A: OpenAI
+	OPENAI_API_KEY=your_real_key_here
+	OPENAI_MODEL=gpt-4o-mini
+
+	# Option B: Gemini
+	GEMINI_API_KEY=your_real_key_here
+	GEMINI_MODEL=gemini-1.5-flash
+
+	# Optional: chat API protection
+	CHAT_RATE_LIMIT_WINDOW_MS=300000
+	CHAT_RATE_LIMIT_MAX_REQUESTS=30
+	ALLOWED_ORIGINS=http://localhost:5500,http://127.0.0.1:5500
+	```
+
+3. Start app:
+
+	```bash
+	npm run dev
+	```
+
+## Required Keys Checklist
+
+Update `/.env.anurag` before running the app:
+
+- [ ] `OPENAI_API_KEY` (optional if using Gemini only)
+- [ ] `GEMINI_API_KEY` (optional if using OpenAI only)
+- [ ] At least one provider key is set (`OPENAI_API_KEY` or `GEMINI_API_KEY`)
+- [ ] `OPENAI_MODEL` or `GEMINI_MODEL` (defaults are already provided)
+- [ ] `ALLOWED_ORIGINS` includes your local/frontend origin
+- [ ] `CHAT_RATE_LIMIT_WINDOW_MS` and `CHAT_RATE_LIMIT_MAX_REQUESTS` set as desired
+
+How security works:
+
+- Frontend never stores or exposes `OPENAI_API_KEY`.
+- Frontend never stores or exposes `GEMINI_API_KEY`.
+- Keys are used only in `server.js` via `/api/chat`.
+- `/api/chat` includes per-IP rate limiting (default: 30 requests / 5 minutes).
+- `/api/chat` checks request `Origin` against `ALLOWED_ORIGINS`.
+- `.env` and `.env.*` are ignored by git.
 
 ## Project structure (simple)
 
@@ -48,8 +100,13 @@ Main static files:
 ## Credentials and Environment Safety
 
 - `.env` and `.env.*` are ignored in git.
-- `.env.anurag` is safe template only.
-- Keep real keys only in local `.env.local`.
+- `.env.anurag` is the primary environment file for this project.
+
+Before pushing to GitHub, run:
+
+```bash
+npm run security:check
+```
 
 ## Important note
 
@@ -58,7 +115,7 @@ This is an educational health assistant and **not a medical diagnosis system**.
 **Stay Safe:- @ANURAG SINGH(RootPhantom)**
 
 
-# Use input.md file to understand the inputss
+# Use input.md file to understand the inputs
 
 
 ### Expected Behavior

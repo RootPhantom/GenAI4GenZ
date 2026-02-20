@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "security:check": "node scripts/security-check.js",
     "static": "python3 -m http.server 5500",
     "static:alt": "npx serve . -l 5500"
   }

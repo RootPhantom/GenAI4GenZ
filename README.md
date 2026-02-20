@@ -29,6 +29,10 @@ Main static files:
 - `script.js`
 - `server.js`
 
+Project feature reference:
+
+- `silly_codder_rootphantom.md`
+
 ## Secure API Key Setup (Chatbot)
 
 1. Create your local env file (never commit real keys):
@@ -111,6 +115,8 @@ npm run security:check
 ## Important note
 
 This is an educational health assistant and **not a medical diagnosis system**.
+
+If you want to use the source code please tag the developer.
 
 **Stay Safe:- @ANURAG SINGH(RootPhantom)**
 

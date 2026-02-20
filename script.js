@@ -9,9 +9,12 @@ const healthConditionRing = document.getElementById("healthConditionRing");
 const healthConditionPercent = document.getElementById("healthConditionPercent");
 const healthConditionLabel = document.getElementById("healthConditionLabel");
 const dashboardSection = document.getElementById("dashboard");
+const reportCardSection = document.getElementById("report-card");
 const reportPatientName = document.getElementById("reportPatientName");
+const reportPatientAge = document.getElementById("reportPatientAge");
 const reportHealthLevel = document.getElementById("reportHealthLevel");
 const reportHealthScore = document.getElementById("reportHealthScore");
+const reportHealthBadge = document.getElementById("reportHealthBadge");
 const reportRisks = document.getElementById("reportRisks");
 const reportConditions = document.getElementById("reportConditions");
 const reportDoctorReview = document.getElementById("reportDoctorReview");
@@ -32,19 +35,51 @@ const addChat = (text, role = "assistant") => {
   chatLog.scrollTop = chatLog.scrollHeight;
 };
 
-const scoreFromInput = (v) => {
+const getAgeProfile = (ageValue) => {
+  const age = Math.max(1, Math.min(120, Number(ageValue) || 30));
+
+  if (age >= 60) {
+    return {
+      label: `Senior (${age})`,
+      heartRateHigh: 100,
+      heartRateLow: 50,
+      sleepLow: 6.5,
+      stepsLow: 5500,
+      bpHighSys: 145,
+      bpHighDia: 92,
+      bpUrgentSys: 165,
+      bpUrgentDia: 102
+    };
+  }
+
+  return {
+    label: `Adult (${age})`,
+    heartRateHigh: 95,
+    heartRateLow: 55,
+    sleepLow: 7,
+    stepsLow: 7000,
+    bpHighSys: 140,
+    bpHighDia: 90,
+    bpUrgentSys: 160,
+    bpUrgentDia: 100
+  };
+};
+
+const scoreFromInput = (v, ageProfile) => {
   let score = 85;
-  if (v.sleepHours < 7) score -= 8;
-  if (v.steps < 7000) score -= 7;
-  if (v.heartRate > 95 || v.heartRate < 55) score -= 10;
+  if (v.sleepHours < ageProfile.sleepLow) score -= 8;
+  if (v.steps < ageProfile.stepsLow) score -= 7;
+  if (v.heartRate > ageProfile.heartRateHigh || v.heartRate < ageProfile.heartRateLow) score -= 10;
   if (/poor|junk|irregular/i.test(v.diet)) score -= 6;
   if (/high|severe/i.test(v.stress)) score -= 8;
   return Math.max(0, Math.min(100, score));
 };
 
-const flagsFromInput = (v) => {
+const flagsFromInput = (v, ageProfile) => {
   const flags = [];
-  if (v.heartRate > 100 || v.heartRate < 55) flags.push("Abnormal heart rate");
+  if (v.heartRate > ageProfile.heartRateHigh + 5 || v.heartRate < ageProfile.heartRateLow) {
+    flags.push("Abnormal heart rate");
+  }
   if (v.sleepHours < 6) flags.push("Sleep deficit");
   if (v.steps < 4000) flags.push("Low activity");
   if (/high|severe/i.test(v.stress)) flags.push("High stress");
@@ -58,7 +93,7 @@ const parseBloodPressure = (bpText) => {
   return { systolic: Number(match[1]), diastolic: Number(match[2]) };
 };
 
-const detectClinicalPatterns = (input) => {
+const detectClinicalPatterns = (input, ageProfile) => {
   const conditions = [];
   const symptomsText = `${input.symptoms} ${input.medicalHistory}`.toLowerCase();
   const { systolic, diastolic } = parseBloodPressure(input.bloodPressure);
@@ -69,7 +104,7 @@ const detectClinicalPatterns = (input) => {
     }
   };
 
-  if ((systolic && systolic >= 140) || (diastolic && diastolic >= 90)) {
+  if ((systolic && systolic >= ageProfile.bpHighSys) || (diastolic && diastolic >= ageProfile.bpHighDia)) {
     pushCondition("Hypertension Risk", 3, "Monitor BP twice daily and consult physician for BP management.");
   }
 
@@ -100,12 +135,14 @@ const detectClinicalPatterns = (input) => {
   return conditions;
 };
 
-const getDoctorReviewUrgency = (input, conditions) => {
+const getDoctorReviewUrgency = (input, conditions, ageProfile) => {
   const severeCondition = conditions.some((condition) => condition.severity >= 3);
   const symptomCritical = /chest pain|shortness of breath|severe dizziness|faint|blackout/i.test(input.symptoms);
   const hrCritical = input.heartRate >= 120 || input.heartRate <= 45;
   const { systolic, diastolic } = parseBloodPressure(input.bloodPressure);
-  const bpCritical = (systolic && systolic >= 160) || (diastolic && diastolic >= 100);
+  const bpCritical =
+    (systolic && systolic >= ageProfile.bpUrgentSys) ||
+    (diastolic && diastolic >= ageProfile.bpUrgentDia);
 
   if (symptomCritical || hrCritical || bpCritical) {
     return "Urgent doctor review recommended (within 24h)";
@@ -120,6 +157,25 @@ const getDoctorReviewUrgency = (input, conditions) => {
   }
 
   return "No immediate doctor review needed";
+};
+
+const getHealthBadge = (score) => {
+  const safeScore = Math.max(0, Math.min(100, Number(score) || 0));
+
+  if (safeScore < 40) {
+    return { label: "🔴 Critical Care", className: "badge-critical" };
+  }
+  if (safeScore < 60) {
+    return { label: "🟠 Recovery Mode", className: "badge-low" };
+  }
+  if (safeScore < 75) {
+    return { label: "🟡 Health Tracker", className: "badge-mid" };
+  }
+  if (safeScore < 90) {
+    return { label: "🟢 Wellness Star", className: "badge-good" };
+  }
+
+  return { label: "🔵 Health Champion", className: "badge-elite" };
 };
 
 const updateHealthCondition = (score) => {
@@ -148,10 +204,14 @@ const updateHealthCondition = (score) => {
   return { state, label, normalized };
 };
 
-const updateReportCard = ({ patientName, input, summary, finalScore, healthLabel, risks, conditions, doctorReview, recs }) => {
+const updateReportCard = ({ patientName, patientAgeLabel, input, summary, finalScore, healthLabel, healthBadge, risks, conditions, doctorReview, recs }) => {
   reportPatientName.textContent = patientName;
+  reportPatientAge.textContent = patientAgeLabel;
   reportHealthLevel.textContent = healthLabel;
   reportHealthScore.textContent = `${finalScore}%`;
+  reportHealthBadge.textContent = healthBadge.label;
+  reportHealthBadge.classList.remove("badge-critical", "badge-low", "badge-mid", "badge-good", "badge-elite");
+  reportHealthBadge.classList.add(healthBadge.className);
   reportRisks.textContent = risks.length ? risks.join(", ") : "No major risk flags";
   reportConditions.textContent = conditions.length
     ? conditions.map((condition) => condition.label).join(", ")
@@ -183,44 +243,106 @@ const downloadPdfReport = () => {
   const doc = new jsPDF();
 
   const patientName = reportPatientName.textContent || "-";
+  const patientAge = reportPatientAge.textContent || "-";
   const healthLevel = reportHealthLevel.textContent || "-";
   const healthScore = reportHealthScore.textContent || "-";
+  const healthBadge = reportHealthBadge.textContent || "-";
   const risks = reportRisks.textContent || "-";
   const conditions = reportConditions.textContent || "-";
   const doctorReview = reportDoctorReview.textContent || "-";
   const healthReports = reportHealthReports.textContent || "-";
   const advices = Array.from(reportAdvices.querySelectorAll("li")).map((li) => li.textContent || "");
 
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const cardX = 10;
+  const cardY = 12;
+  const cardW = pageWidth - 20;
+  const cardH = pageHeight - 24;
+
+  doc.setDrawColor(37, 99, 235);
+  doc.setLineWidth(1.2);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "S");
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(cardX, cardY, cardW, 24, "F");
+
+  doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
-  doc.text("Health Monitoring Agent - Patient Report Card", 14, 16);
+  doc.text("HEALTH MONITORING CERTIFICATE", cardX + 8, cardY + 15);
+  doc.setFontSize(9);
+  doc.text("AI Health Summary & Risk Evaluation Card", cardX + 8, cardY + 20);
+
+  const sealX = cardX + cardW - 20;
+  const sealY = cardY + 12;
+  doc.setFillColor(37, 99, 235);
+  doc.circle(sealX, sealY, 8, "F");
+  doc.setDrawColor(191, 219, 254);
+  doc.setLineWidth(0.8);
+  doc.circle(sealX, sealY, 8, "S");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(7);
+  doc.text("AS", sealX - 2.5, sealY + 2);
+
+  doc.saveGraphicsState();
+  doc.setTextColor(214, 228, 245);
+  doc.setFontSize(34);
+  doc.text("ANURAG SINGH", cardX + 24, cardY + 150, { angle: 28 });
+  doc.restoreGraphicsState();
+
+  doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
-  doc.text(`Patient Name: ${patientName}`, 14, 28);
-  doc.text(`Health Level: ${healthLevel}`, 14, 36);
-  doc.text(`Health Score: ${healthScore}`, 14, 44);
-  doc.text(`Risks: ${risks}`, 14, 52);
-  doc.text(`Detected Conditions: ${conditions}`, 14, 60);
-  doc.text(`Doctor Review: ${doctorReview}`, 14, 68);
 
-  const reportLines = doc.splitTextToSize(`Health Reports: ${healthReports}`, 180);
-  doc.text(reportLines, 14, 80);
+  let y = cardY + 34;
+  const lineGap = 8;
+  doc.text(`Patient Name: ${patientName}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Age Profile: ${patientAge}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Health Level: ${healthLevel}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Health Score: ${healthScore}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Health Badge: ${healthBadge}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Risks: ${risks}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Detected Conditions: ${conditions}`, cardX + 8, y);
+  y += lineGap;
+  doc.text(`Doctor Review: ${doctorReview}`, cardX + 8, y);
 
-  const adviceHeaderY = 80 + reportLines.length * 6 + 6;
-  doc.text("Advices:", 14, adviceHeaderY);
+  y += 8;
+  doc.setFontSize(12);
+  doc.text("Health Reports", cardX + 8, y);
+  y += 6;
+  doc.setFontSize(10);
+  const reportLines = doc.splitTextToSize(healthReports, cardW - 16);
+  doc.text(reportLines, cardX + 8, y);
 
-  let currentY = adviceHeaderY + 8;
+  y += Math.min(reportLines.length * 5 + 8, 70);
+  doc.setFontSize(12);
+  doc.text("Advices", cardX + 8, y);
+  y += 6;
+  doc.setFontSize(10);
   if (!advices.length) {
-    doc.text("- No advice available", 16, currentY);
-    currentY += 8;
+    doc.text("- No advice available", cardX + 8, y);
+    y += 6;
   } else {
-    advices.forEach((advice) => {
-      const adviceLines = doc.splitTextToSize(`- ${advice}`, 176);
-      doc.text(adviceLines, 16, currentY);
-      currentY += adviceLines.length * 6 + 2;
+    advices.slice(0, 6).forEach((advice) => {
+      const adviceLines = doc.splitTextToSize(`- ${advice}`, cardW - 16);
+      doc.text(adviceLines, cardX + 8, y);
+      y += adviceLines.length * 5 + 1;
     });
   }
 
-  doc.setFontSize(12);
-  doc.text("Generated by ANURAG SINGH", 14, Math.min(currentY + 8, 285));
+  const footerY = cardY + cardH - 10;
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+  doc.line(cardX + 8, footerY - 6, cardX + cardW - 8, footerY - 6);
+  doc.setFontSize(11);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Generated by ANURAG SINGH", cardX + 8, footerY);
+  doc.text(`Generated on: ${new Date().toLocaleDateString()}`, cardX + cardW - 62, footerY);
 
   const safeName = (patientName || "patient").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   doc.save(`health-report-${safeName}.pdf`);
@@ -233,6 +355,7 @@ healthForm.addEventListener("submit", (e) => {
   const formData = new FormData(healthForm);
   const input = {
     patientName: String(formData.get("patientName") || "Patient"),
+    patientAge: Number(formData.get("patientAge") || 30),
     medicalHistory: String(formData.get("medicalHistory") || ""),
     symptoms: String(formData.get("symptoms") || ""),
     medications: String(formData.get("medications") || ""),
@@ -245,14 +368,16 @@ healthForm.addEventListener("submit", (e) => {
     stress: String(formData.get("stress") || "")
   };
 
-  const flags = flagsFromInput(input);
-  const conditions = detectClinicalPatterns(input);
+  const ageProfile = getAgeProfile(input.patientAge);
+
+  const flags = flagsFromInput(input, ageProfile);
+  const conditions = detectClinicalPatterns(input, ageProfile);
   const conditionFlags = conditions.map((condition) => condition.label);
   const combinedRisks = [...new Set([...flags, ...conditionFlags])];
-  const score = scoreFromInput(input) - flags.length * 3;
+  const score = scoreFromInput(input, ageProfile) - flags.length * 3;
   const finalScore = Math.max(0, score);
   const risk = finalScore < 50 || combinedRisks.length >= 4 ? "High" : finalScore < 75 ? "Medium" : "Low";
-  const doctorReview = getDoctorReviewUrgency(input, conditions);
+  const doctorReview = getDoctorReviewUrgency(input, conditions, ageProfile);
 
   const summary = `History: ${input.medicalHistory.slice(0, 120)} | Symptoms: ${input.symptoms.slice(0, 90)} | Vitals: HR ${input.heartRate}, BP ${input.bloodPressure}, Sleep ${input.sleepHours}h, Steps ${input.steps}`;
 
@@ -270,6 +395,7 @@ healthForm.addEventListener("submit", (e) => {
   summaryText.textContent = summary;
   compressedPayload.textContent = compressed;
   healthScoreEl.textContent = String(finalScore);
+  const healthBadge = getHealthBadge(finalScore);
   const { label: healthLabel } = updateHealthCondition(finalScore);
   riskFlagsEl.textContent = combinedRisks.length ? combinedRisks.join(", ") : "No flags";
   riskBadge.textContent = `Risk: ${risk}`;
@@ -294,10 +420,12 @@ healthForm.addEventListener("submit", (e) => {
 
   updateReportCard({
     patientName: input.patientName,
+    patientAgeLabel: ageProfile.label,
     input,
     summary,
     finalScore,
     healthLabel,
+    healthBadge,
     risks: combinedRisks,
     conditions,
     doctorReview,
@@ -307,7 +435,7 @@ healthForm.addEventListener("submit", (e) => {
   statusEl.textContent = "Done. Summary and recommendations updated.";
   addChat("Your health data is processed. Ask me: 'How is my health?'");
 
-  dashboardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+  reportCardSection?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 chatForm.addEventListener("submit", (e) => {

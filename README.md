@@ -7,7 +7,7 @@ A clean and human-friendly health dashboard built with pure HTML, CSS, and JavaS
 1. Go to project folder:
 
 	```bash
-	cd /workspaces/GenAI4GenZ
+	cd /GenAI4GenZ
 	```
 
 2. Run static server:

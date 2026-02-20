@@ -93,6 +93,7 @@
           </div>
           <form id="healthForm" class="grid form-grid">
             <input name="patientName" placeholder="Patient name" required />
+            <input name="patientAge" type="number" min="1" max="120" placeholder="Patient age" required />
             <textarea name="medicalHistory" placeholder="Medical history" required></textarea>
             <textarea name="symptoms" placeholder="Symptoms" required></textarea>
             <textarea name="medications" placeholder="Medications" required></textarea>
@@ -124,12 +125,20 @@
               <p id="reportPatientName">—</p>
             </article>
             <article class="report-item">
+              <h4>Patient Age Profile</h4>
+              <p id="reportPatientAge">—</p>
+            </article>
+            <article class="report-item">
               <h4>Health Level</h4>
               <p id="reportHealthLevel">—</p>
             </article>
             <article class="report-item">
               <h4>Health Score</h4>
               <p id="reportHealthScore">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Health Badge</h4>
+              <p id="reportHealthBadge" class="score-badge badge-mid">—</p>
             </article>
             <article class="report-item">
               <h4>Risks</h4>

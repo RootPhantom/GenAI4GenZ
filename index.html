@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Health Monitoring Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar card">
+        <div class="brand">
+          <div class="brand-icon">+</div>
+          <div>
+            <h2>Health Agent</h2>
+            <p class="muted">AI + Compression</p>
+          </div>
+        </div>
+        <div class="monitor-strip">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <nav>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#input">Health Input</a>
+          <a href="#compression">Compression</a>
+          <a href="#recommendations">Recommendations</a>
+          <a href="#chat">Chatbot</a>
+          <a href="#profile">Profile</a>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="top card">
+          <div>
+            <p class="muted">Live Monitoring Panel</p>
+            <h1>Health Monitoring Agent</h1>
+            <p class="muted top-note">Personalized wellness intelligence with compressed clinical context.</p>
+          </div>
+          <span id="riskBadge" class="badge medium">Risk: Medium</span>
+        </header>
+
+        <section class="quick-stats grid three">
+          <article class="card stat-card">
+            <p class="stat-label">Heart Rhythm</p>
+            <p class="stat-value">Stable</p>
+          </article>
+          <article class="card stat-card">
+            <p class="stat-label">Sleep Trend</p>
+            <p class="stat-value">Improving</p>
+          </article>
+          <article class="card stat-card">
+            <p class="stat-label">Activity State</p>
+            <p class="stat-value">Moderate</p>
+          </article>
+        </section>
+
+        <section id="dashboard" class="grid two">
+          <article class="card emphasis-card">
+            <h3>Health Score</h3>
+            <p class="score" id="healthScore">72</p>
+            <div class="condition-wrap">
+              <div id="healthConditionRing" class="health-ring mid" style="--progress: 72;">
+                <div class="ring-inner">
+                  <p id="healthConditionPercent">72%</p>
+                </div>
+              </div>
+              <p class="condition-text">
+                Condition:
+                <span id="healthConditionLabel" class="condition-label mid">Mid</span>
+              </p>
+            </div>
+            <p class="muted">Auto-calculated from sleep, heart rate, steps, stress and symptoms.</p>
+          </article>
+          <article class="card">
+            <h3>Compressed Summary</h3>
+            <p id="summaryText">No summary yet. Fill your data to generate a compressed overview.</p>
+          </article>
+        </section>
+
+        <section id="input" class="card">
+          <div class="section-head">
+            <h3>Health Data Input</h3>
+            <span class="chip">Daily Check-in</span>
+          </div>
+          <form id="healthForm" class="grid form-grid">
+            <input name="patientName" placeholder="Patient name" required />
+            <textarea name="medicalHistory" placeholder="Medical history" required></textarea>
+            <textarea name="symptoms" placeholder="Symptoms" required></textarea>
+            <textarea name="medications" placeholder="Medications" required></textarea>
+            <input name="heartRate" type="number" placeholder="Heart rate" required />
+            <input name="bloodPressure" placeholder="Blood pressure" required />
+            <input name="sleepHours" type="number" step="0.1" placeholder="Sleep hours" required />
+            <input name="steps" type="number" placeholder="Steps" required />
+            <input name="exercise" placeholder="Exercise habits" required />
+            <input name="diet" placeholder="Diet habits" required />
+            <input name="stress" placeholder="Stress level" required />
+            <button type="submit">Compress + Analyze</button>
+          </form>
+          <p id="formStatus" class="muted"></p>
+        </section>
+
+        <section id="report-card" class="card">
+          <div class="section-head">
+            <h3>Patient Report Card</h3>
+            <span class="chip">Auto Generated</span>
+          </div>
+
+          <div class="report-actions">
+            <button id="downloadReportBtn" type="button" class="download-btn">Download Report (PDF)</button>
+          </div>
+
+          <div class="report-grid">
+            <article class="report-item">
+              <h4>Patient Name</h4>
+              <p id="reportPatientName">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Health Level</h4>
+              <p id="reportHealthLevel">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Health Score</h4>
+              <p id="reportHealthScore">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Risks</h4>
+              <p id="reportRisks">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Detected Conditions</h4>
+              <p id="reportConditions">—</p>
+            </article>
+            <article class="report-item">
+              <h4>Doctor Review</h4>
+              <p id="reportDoctorReview">—</p>
+            </article>
+          </div>
+
+          <article class="report-block">
+            <h4>Health Reports</h4>
+            <p id="reportHealthReports">Submit data to generate report content.</p>
+          </article>
+
+          <article class="report-block">
+            <h4>Advices</h4>
+            <ul id="reportAdvices"></ul>
+          </article>
+
+          <p class="report-signature">Generated by <span>ANURAG SINGH</span></p>
+        </section>
+
+        <section id="compression" class="card">
+          <div class="section-head">
+            <h3>Compression Output</h3>
+            <span class="chip">Cost Optimized</span>
+          </div>
+          <p><strong>Risk Flags:</strong> <span id="riskFlags">No flags</span></p>
+          <p><strong>Compressed JSON:</strong></p>
+          <pre id="compressedPayload">—</pre>
+        </section>
+
+        <section id="recommendations" class="card">
+          <div class="section-head">
+            <h3>Personalized Recommendations</h3>
+            <span class="chip">AI Guidance</span>
+          </div>
+          <ul id="recommendationList"></ul>
+        </section>
+
+        <section id="chat" class="card">
+          <h3>Smart Health Chatbot</h3>
+          <div id="chatLog" class="chat-log"></div>
+          <form id="chatForm" class="chat-row">
+            <input id="chatInput" placeholder="How is my health?" />
+            <button type="submit">Send</button>
+          </form>
+        </section>
+
+        <section id="profile" class="card">
+          <h3>Profile</h3>
+          <p class="muted">Demo profile: Anurag (Wellness + Productivity)</p>
+        </section>
+      </main>
+    </div>
+
+    <footer class="developer-credit">
+      Developed by <span>ANURAG SINGH</span>
+    </footer>
+
+    <script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  </body>
+</html>

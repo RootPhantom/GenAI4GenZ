@@ -1,0 +1,9 @@
+{
+  "name": "health-monitoring-agent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "static": "python3 -m http.server 5500",
+    "static:alt": "npx serve . -l 5500"
+  }
+}

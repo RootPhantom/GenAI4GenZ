@@ -27,6 +27,7 @@ const chatForm = document.getElementById("chatForm");
 const chatInput = document.getElementById("chatInput");
 
 let latest = null;
+const REPORT_LOGO_PATH = "assets/anurag-health-card-logo.png";
 
 const addChat = (text, role = "assistant") => {
   const p = document.createElement("p");
@@ -232,7 +233,31 @@ const updateReportCard = ({ patientName, patientAgeLabel, input, summary, finalS
   });
 };
 
-const downloadPdfReport = () => {
+const loadLogoAsDataUrl = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas not supported"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      resolve({
+        dataUrl: canvas.toDataURL("image/png"),
+        width: img.naturalWidth,
+        height: img.naturalHeight
+      });
+    };
+    img.onerror = () => reject(new Error("Logo load failed"));
+    img.src = src;
+  });
+
+const downloadPdfReport = async () => {
   const jsPdfApi = window.jspdf;
   if (!jsPdfApi?.jsPDF) {
     alert("PDF library not loaded. Please refresh and try again.");
@@ -252,6 +277,16 @@ const downloadPdfReport = () => {
   const doctorReview = reportDoctorReview.textContent || "-";
   const healthReports = reportHealthReports.textContent || "-";
   const advices = Array.from(reportAdvices.querySelectorAll("li")).map((li) => li.textContent || "");
+
+  const fieldColor = {
+    label: [30, 64, 175],
+    value: [15, 23, 42],
+    heading: [37, 99, 235],
+    positive: [4, 120, 87],
+    warning: [180, 83, 9],
+    danger: [185, 28, 28],
+    muted: [71, 85, 105]
+  };
 
   const pageWidth = 210;
   const pageHeight = 297;
@@ -273,61 +308,62 @@ const downloadPdfReport = () => {
   doc.setFontSize(9);
   doc.text("AI Health Summary & Risk Evaluation Card", cardX + 8, cardY + 20);
 
-  const sealX = cardX + cardW - 20;
-  const sealY = cardY + 12;
-  doc.setFillColor(37, 99, 235);
-  doc.circle(sealX, sealY, 8, "F");
-  doc.setDrawColor(191, 219, 254);
-  doc.setLineWidth(0.8);
-  doc.circle(sealX, sealY, 8, "S");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(7);
-  doc.text("AS", sealX - 2.5, sealY + 2);
-
-  doc.saveGraphicsState();
-  doc.setTextColor(214, 228, 245);
-  doc.setFontSize(34);
-  doc.text("ANURAG SINGH", cardX + 24, cardY + 150, { angle: 28 });
-  doc.restoreGraphicsState();
-
-  doc.setTextColor(15, 23, 42);
   doc.setFontSize(11);
 
   let y = cardY + 34;
   const lineGap = 8;
-  doc.text(`Patient Name: ${patientName}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Age Profile: ${patientAge}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Health Level: ${healthLevel}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Health Score: ${healthScore}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Health Badge: ${healthBadge}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Risks: ${risks}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Detected Conditions: ${conditions}`, cardX + 8, y);
-  y += lineGap;
-  doc.text(`Doctor Review: ${doctorReview}`, cardX + 8, y);
+  const drawField = (label, value, valueColor = fieldColor.value) => {
+    doc.setTextColor(...fieldColor.label);
+    doc.text(`${label}:`, cardX + 8, y);
+    const labelWidth = doc.getTextWidth(`${label}: `);
+    doc.setTextColor(...valueColor);
+    doc.text(String(value), cardX + 8 + labelWidth, y);
+    y += lineGap;
+  };
+
+  const riskColor = /high|urgent|critical/i.test(risks)
+    ? fieldColor.danger
+    : /medium|moderate/i.test(risks)
+      ? fieldColor.warning
+      : fieldColor.positive;
+
+  const doctorReviewColor = /urgent/i.test(doctorReview)
+    ? fieldColor.danger
+    : /soon|routine/i.test(doctorReview)
+      ? fieldColor.warning
+      : fieldColor.positive;
+
+  drawField("Patient Name", patientName);
+  drawField("Age Profile", patientAge);
+  drawField("Health Level", healthLevel);
+  drawField("Health Score", healthScore, fieldColor.heading);
+  drawField("Health Badge", healthBadge, fieldColor.heading);
+  drawField("Risks", risks, riskColor);
+  drawField("Detected Conditions", conditions, fieldColor.muted);
+  drawField("Doctor Review", doctorReview, doctorReviewColor);
 
   y += 8;
   doc.setFontSize(12);
+  doc.setTextColor(...fieldColor.heading);
   doc.text("Health Reports", cardX + 8, y);
   y += 6;
   doc.setFontSize(10);
+  doc.setTextColor(...fieldColor.value);
   const reportLines = doc.splitTextToSize(healthReports, cardW - 16);
   doc.text(reportLines, cardX + 8, y);
 
   y += Math.min(reportLines.length * 5 + 8, 70);
   doc.setFontSize(12);
+  doc.setTextColor(...fieldColor.heading);
   doc.text("Advices", cardX + 8, y);
   y += 6;
   doc.setFontSize(10);
   if (!advices.length) {
+    doc.setTextColor(...fieldColor.muted);
     doc.text("- No advice available", cardX + 8, y);
     y += 6;
   } else {
+    doc.setTextColor(...fieldColor.positive);
     advices.slice(0, 6).forEach((advice) => {
       const adviceLines = doc.splitTextToSize(`- ${advice}`, cardW - 16);
       doc.text(adviceLines, cardX + 8, y);
@@ -343,6 +379,56 @@ const downloadPdfReport = () => {
   doc.setTextColor(30, 41, 59);
   doc.text("Generated by ANURAG SINGH", cardX + 8, footerY);
   doc.text(`Generated on: ${new Date().toLocaleDateString()}`, cardX + cardW - 62, footerY);
+
+  let watermarkApplied = false;
+  try {
+    const logoAsset = await loadLogoAsDataUrl(REPORT_LOGO_PATH);
+
+    const wmMaxW = cardW - 56;
+    const wmMaxH = cardH - 92;
+    const wmScale = Math.min(wmMaxW / logoAsset.width, wmMaxH / logoAsset.height);
+    const wmW = Math.max(80, logoAsset.width * wmScale);
+    const wmH = Math.max(80, logoAsset.height * wmScale);
+    const wmX = cardX + (cardW - wmW) / 2;
+    const wmY = cardY + (cardH - wmH) / 2 + 8;
+
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({ opacity: 0.1 }));
+    doc.addImage(logoAsset.dataUrl, "PNG", wmX, wmY, wmW, wmH, undefined, "FAST");
+    doc.restoreGraphicsState();
+    watermarkApplied = true;
+
+    const maxLogoW = 48;
+    const maxLogoH = 20;
+    const logoScale = Math.min(maxLogoW / logoAsset.width, maxLogoH / logoAsset.height);
+    const logoW = Math.max(12, logoAsset.width * logoScale);
+    const logoH = Math.max(8, logoAsset.height * logoScale);
+    const logoX = cardX + cardW - logoW - 7;
+    const logoY = cardY + 2;
+
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(logoX - 2, logoY - 1, logoW + 4, logoH + 2, 2, 2, "F");
+    doc.addImage(logoAsset.dataUrl, "PNG", logoX, logoY, logoW, logoH, undefined, "FAST");
+  } catch {
+    const sealX = cardX + cardW - 20;
+    const sealY = cardY + 12;
+    doc.setFillColor(37, 99, 235);
+    doc.circle(sealX, sealY, 8, "F");
+    doc.setDrawColor(191, 219, 254);
+    doc.setLineWidth(0.8);
+    doc.circle(sealX, sealY, 8, "S");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(7);
+    doc.text("AS", sealX - 2.5, sealY + 2);
+  }
+
+  if (!watermarkApplied) {
+    doc.saveGraphicsState();
+    doc.setTextColor(214, 228, 245);
+    doc.setFontSize(34);
+    doc.text("ANURAG SINGH", cardX + 24, cardY + 150, { angle: 28 });
+    doc.restoreGraphicsState();
+  }
 
   const safeName = (patientName || "patient").toLowerCase().replace(/[^a-z0-9]+/g, "-");
   doc.save(`health-report-${safeName}.pdf`);

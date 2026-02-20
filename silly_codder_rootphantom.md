@@ -111,6 +111,22 @@ This document summarizes all key features available in the Health Monitoring Age
 - Configured for local run using Node server.
 - Documentation includes setup and required keys checklist.
 
+## 12) Security Check Guide
+
+Run the security check before push:
+
+```bash
+npm run security:check
+```
+
+If output is:
+
+```text
+✅ Security check passed. No obvious secrets detected.
+```
+
+then you are good to push on GitHub.
+
 ---
 
 ## Quick Use Flow
@@ -126,7 +142,3 @@ This document summarizes all key features available in the Health Monitoring Age
 ---
 
 **If you want to use the source code please tag the developer.**
-LinkedIn button is available to connect with developer:
-  - https://www.linkedin.com/in/anurag-singh0041
-- GitHub button is available to follow developer projects:
-  - https://www.github.com/rootphantom

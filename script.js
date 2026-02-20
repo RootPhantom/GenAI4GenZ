@@ -198,6 +198,8 @@ const scoreFromInput = (v, ageProfile) => {
   if (v.sleepHours < ageProfile.sleepLow) score -= 8;
   if (v.steps < ageProfile.stepsLow) score -= 7;
   if (v.heartRate > ageProfile.heartRateHigh || v.heartRate < ageProfile.heartRateLow) score -= 10;
+  if (v.bodyTemperature >= 100.4) score -= 8;
+  if (v.bodyTemperature <= 95) score -= 6;
   if ((systolic && systolic >= ageProfile.bpHighSys) || (diastolic && diastolic >= ageProfile.bpHighDia)) score -= 10;
   if ((systolic && systolic >= ageProfile.bpUrgentSys) || (diastolic && diastolic >= ageProfile.bpUrgentDia)) score -= 6;
   if ((systolic && systolic < 95) || (diastolic && diastolic < 60)) score -= 4;
@@ -222,6 +224,8 @@ const flagsFromInput = (v, ageProfile) => {
   if ((systolic && systolic < 95) || (diastolic && diastolic < 60)) {
     flags.push("Low blood pressure");
   }
+  if (v.bodyTemperature >= 100.4) flags.push("Fever range body temperature");
+  if (v.bodyTemperature <= 95) flags.push("Low body temperature");
   if (v.sleepHours < 6) flags.push("Sleep deficit");
   if (v.steps < 4000) flags.push("Low activity");
   if (/high|severe/i.test(v.stress)) flags.push("High stress");
@@ -246,6 +250,7 @@ const isValidBloodPressure = (bpText) => {
 
 const areVitalsReasonable = (input) => {
   if (input.heartRate < 30 || input.heartRate > 220) return false;
+  if (input.bodyTemperature < 90 || input.bodyTemperature > 110) return false;
   if (input.sleepHours < 0 || input.sleepHours > 24) return false;
   if (input.steps < 0 || input.steps > 100000) return false;
   return true;
@@ -268,6 +273,14 @@ const detectClinicalPatterns = (input, ageProfile) => {
 
   if ((systolic && systolic < 95) || (diastolic && diastolic < 60)) {
     pushCondition("Hypotension Risk", 2, "Increase hydration and seek medical review if dizziness persists.");
+  }
+
+  if (input.bodyTemperature >= 100.4) {
+    pushCondition("Febrile Pattern", 2, "Hydrate well, rest, and monitor temperature every 4-6 hours.");
+  }
+
+  if (input.bodyTemperature <= 95) {
+    pushCondition("Hypothermia Concern", 3, "Warm gradually and seek urgent medical evaluation for persistent low temperature.");
   }
 
   if (input.heartRate > 110 || /chest|palpitation|dizziness/.test(symptomsText)) {
@@ -297,12 +310,13 @@ const getDoctorReviewUrgency = (input, conditions, ageProfile) => {
   const severeCondition = conditions.some((condition) => condition.severity >= 3);
   const symptomCritical = /chest pain|shortness of breath|severe dizziness|faint|blackout/i.test(input.symptoms);
   const hrCritical = input.heartRate >= 120 || input.heartRate <= 45;
+  const tempCritical = input.bodyTemperature >= 103.5 || input.bodyTemperature <= 94;
   const { systolic, diastolic } = parseBloodPressure(input.bloodPressure);
   const bpCritical =
     (systolic && systolic >= ageProfile.bpUrgentSys) ||
     (diastolic && diastolic >= ageProfile.bpUrgentDia);
 
-  if (symptomCritical || hrCritical || bpCritical) {
+  if (symptomCritical || hrCritical || bpCritical || tempCritical) {
     return "Urgent doctor review recommended (within 24h)";
   }
 
@@ -378,7 +392,7 @@ const updateReportCard = ({ patientName, patientAgeLabel, input, summary, finalS
 
   reportHealthReports.textContent =
     `Medical History: ${input.medicalHistory} | Symptoms: ${input.symptoms} | Medications: ${input.medications} | ` +
-    `Vitals: HR ${input.heartRate}, BP ${input.bloodPressure}, Sleep ${input.sleepHours}h, Steps ${input.steps} | ` +
+    `Vitals: HR ${input.heartRate}, BP ${input.bloodPressure}, Temp ${input.bodyTemperature}°F, Sleep ${input.sleepHours}h, Steps ${input.steps} | ` +
     `Detected Conditions: ${conditions.map((condition) => condition.label).join(", ") || "None"} | ` +
     `Summary: ${summary}`;
 
@@ -668,6 +682,7 @@ healthForm.addEventListener("submit", (e) => {
     medications: sanitizeText(formData.get("medications"), 500),
     heartRate: Number(formData.get("heartRate") || 0),
     bloodPressure: sanitizeText(formData.get("bloodPressure"), 20),
+    bodyTemperature: Number(formData.get("bodyTemperature") || 0),
     sleepHours: Number(formData.get("sleepHours") || 0),
     steps: Number(formData.get("steps") || 0),
     exercise: sanitizeText(formData.get("exercise"), 300),
@@ -681,7 +696,7 @@ healthForm.addEventListener("submit", (e) => {
   }
 
   if (!areVitalsReasonable(input)) {
-    statusEl.textContent = "Please check vitals values (heart rate, sleep hours, steps) and submit again.";
+    statusEl.textContent = "Please check vitals values (heart rate, temperature, sleep hours, steps) and submit again.";
     return;
   }
 
@@ -696,7 +711,7 @@ healthForm.addEventListener("submit", (e) => {
   const risk = finalScore < 50 || combinedRisks.length >= 4 ? "High" : finalScore < 75 ? "Medium" : "Low";
   const doctorReview = getDoctorReviewUrgency(input, conditions, ageProfile);
 
-  const summary = `History: ${input.medicalHistory.slice(0, 120)} | Symptoms: ${input.symptoms.slice(0, 90)} | Vitals: HR ${input.heartRate}, BP ${input.bloodPressure}, Sleep ${input.sleepHours}h, Steps ${input.steps}`;
+  const summary = `History: ${input.medicalHistory.slice(0, 120)} | Symptoms: ${input.symptoms.slice(0, 90)} | Vitals: HR ${input.heartRate}, BP ${input.bloodPressure}, Temp ${input.bodyTemperature}°F, Sleep ${input.sleepHours}h, Steps ${input.steps}`;
 
   const compressed = btoa(
     JSON.stringify({
@@ -718,6 +733,9 @@ healthForm.addEventListener("submit", (e) => {
   riskBadge.classList.add(risk.toLowerCase());
 
   const recs = [];
+  if (input.bodyTemperature >= 100.4) recs.push("Stay hydrated, take rest, and monitor your temperature every 4-6 hours.");
+  if (input.bodyTemperature >= 103) recs.push("Seek urgent medical care if high fever persists or worsens.");
+  if (input.bodyTemperature <= 95) recs.push("Keep warm and seek immediate medical review for low body temperature.");
   if (input.sleepHours < 7) recs.push("Improve sleep schedule and reduce screen time before bed.");
   if (input.steps < 8000) recs.push("Increase daily steps with 2 short walks.");
   if (/high|severe/i.test(input.stress)) recs.push("Do 10 minutes of breathing/meditation twice daily.");
@@ -781,6 +799,7 @@ const respondToChat = (text) => {
   const getDataQualityConfidence = () => {
     const hasVitals =
       Number(latest.input?.heartRate) > 0 &&
+      Number(latest.input?.bodyTemperature) > 0 &&
       Number(latest.input?.sleepHours) > 0 &&
       Number(latest.input?.steps) > 0 &&
       /\d{2,3}\s*[\/-]\s*\d{2,3}/.test(String(latest.input?.bloodPressure || ""));
@@ -800,7 +819,7 @@ const respondToChat = (text) => {
     summary: hasAny([/summar/, /overview/, /history/, /report/]),
     doctor: hasAny([/doctor/, /consult/, /review/, /hospital/, /urgent/]),
     recommendation: hasAny([/recommend/, /advice/, /suggest/, /improve/, /better/]),
-    vitals: hasAny([/heart rate/, /bp/, /blood pressure/, /sleep/, /steps/, /vitals/]),
+    vitals: hasAny([/heart rate/, /bp/, /blood pressure/, /temperature/, /temp/, /sleep/, /steps/, /vitals/]),
     conditions: hasAny([/detected condition/, /\bcondition\b/, /diagnos/, /pattern/]),
     greeting: hasAny([/hello/, /hi\b/, /hey/, /good morning/, /good evening/])
   };
@@ -848,7 +867,7 @@ const respondToChat = (text) => {
   }
 
   if (intents.vitals) {
-    const vitalsText = `Vitals are HR ${latest.input.heartRate}, BP ${latest.input.bloodPressure}, Sleep ${latest.input.sleepHours}h, Steps ${latest.input.steps}.`;
+    const vitalsText = `Vitals are HR ${latest.input.heartRate}, BP ${latest.input.bloodPressure}, Temp ${latest.input.bodyTemperature}°F, Sleep ${latest.input.sleepHours}h, Steps ${latest.input.steps}.`;
     sendWithConfidence(vitalsText, getDataQualityConfidence());
     return;
   }
